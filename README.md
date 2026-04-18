@@ -33,45 +33,25 @@ Automatically shuts down the system at a configured time with desktop notificati
 
 ## Installation
 
-### Steam game time limiter
+Run the install script and follow the prompts:
 
 ```bash
-# Install the script
-cp steam-limiter.sh ~/.local/bin/steam-limiter.sh
-chmod +x ~/.local/bin/steam-limiter.sh
-
-# Install the systemd user service
-cp steam-limiter.service ~/.config/systemd/user/steam-limiter.service
-
-# Enable and start
-systemctl --user daemon-reload
-systemctl --user enable --now steam-limiter.service
+bash install.sh
 ```
 
-**Configuration** — override defaults by editing the service file:
-```bash
-systemctl --user edit steam-limiter.service
-```
-```ini
-[Service]
-Environment=LIMIT_MINUTES=60
-Environment=POLL_SECONDS=10
-```
+It will ask for:
+- Daily gaming time limit (minutes)
+- Hour of day to reset the gaming timer
+- Hour of day to shut down the system
+
+Re-running `install.sh` updates all configuration in place.
 
 **View logs:**
 ```bash
 journalctl --user -u steam-limiter.service -f
 ```
 
-**Check current state:**
-```bash
-cat /tmp/steam-game-limiter.state
-```
-
-### Shutdown scheduler
-
-The crontab entries are installed automatically by `install.sh`. To adjust the shutdown time, edit your crontabs directly:
-
+**Adjust shutdown time or notifications after install:**
 ```bash
 crontab -e        # user entries (notifications)
 sudo crontab -e   # root entry (shutdown)
