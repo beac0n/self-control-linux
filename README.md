@@ -22,7 +22,7 @@ A systemd user service that tracks how long you've been playing Steam games and 
 accumulated_seconds session_start warned_10 warned_5 warned_1
 ```
 
-### 2. Shutdown scheduler (`crontab.txt`)
+### 2. Shutdown scheduler
 
 Automatically shuts down the system at a configured time with desktop notification warnings beforehand. Useful for enforcing a consistent bedtime.
 
@@ -70,22 +70,12 @@ cat /tmp/steam-game-limiter.state
 
 ### Shutdown scheduler
 
-1. Find your UID:
-```bash
-id -u
-```
+The crontab entries are installed automatically by `install.sh`. To adjust the shutdown time, edit your crontabs directly:
 
-2. Add user crontab entries (replace `1000` with your UID):
 ```bash
-crontab -e
+crontab -e        # user entries (notifications)
+sudo crontab -e   # root entry (shutdown)
 ```
-Paste the user entries from `crontab.txt`, updating the UID and times as needed.
-
-3. Add the root shutdown entry:
-```bash
-sudo crontab -e
-```
-Paste the root entry from `crontab.txt`, updating the time as needed.
 
 ## Dependencies
 
