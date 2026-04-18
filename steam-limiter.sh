@@ -3,6 +3,7 @@
 # Configuration (overridable via systemd environment)
 LIMIT_MINUTES=${LIMIT_MINUTES:-60}
 POLL_SECONDS=${POLL_SECONDS:-10}
+RESET_HOUR=${RESET_HOUR:-6}       # hour of day to reset daily limit (0-23)
 HEARTBEAT_INTERVAL=600  # log idle heartbeat every 10 minutes
 KILL_DELAY_SECONDS=10   # wait this long after game start before killing
 
@@ -10,7 +11,8 @@ USER_ID=$(id -u)
 DISPLAY=${DISPLAY:-:0}
 DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/${USER_ID}/bus"
 
-STATE_FILE="/tmp/steam-game-limiter.state"
+STATE_FILE="${XDG_DATA_HOME:-$HOME/.local/share}/steam-limiter/state"
+mkdir -p "$(dirname "$STATE_FILE")"
 LIMIT_SECONDS=$(( LIMIT_MINUTES * 60 ))
 LAST_HEARTBEAT=0
 
@@ -62,18 +64,34 @@ clamp_accumulated() {
 
 load_state() {
     if [ -f "$STATE_FILE" ]; then
-        read -r ACCUMULATED SESSION_START WARNED_10 WARNED_5 WARNED_1 < "$STATE_FILE"
+        read -r ACCUMULATED SESSION_START WARNED_10 WARNED_5 WARNED_1 LAST_RESET_DATE < "$STATE_FILE"
+        LAST_RESET_DATE=${LAST_RESET_DATE:-0}
     else
         ACCUMULATED=0
         SESSION_START=0
         WARNED_10=0; WARNED_5=0; WARNED_1=0
+        LAST_RESET_DATE=0
     fi
     clamp_accumulated
 }
 
 save_state() {
     clamp_accumulated
-    echo "$ACCUMULATED $SESSION_START $WARNED_10 $WARNED_5 $WARNED_1" > "$STATE_FILE"
+    echo "$ACCUMULATED $SESSION_START $WARNED_10 $WARNED_5 $WARNED_1 $LAST_RESET_DATE" > "$STATE_FILE"
+}
+
+check_daily_reset() {
+    local today hour
+    today=$(date +%Y%m%d)
+    hour=$(date +%-H)
+    if [ "$hour" -ge "$RESET_HOUR" ] && [ "$today" != "$LAST_RESET_DATE" ]; then
+        log "Daily reset triggered (reset_hour=${RESET_HOUR}:00) — clearing accumulated time"
+        ACCUMULATED=0
+        SESSION_START=0
+        WARNED_10=0; WARNED_5=0; WARNED_1=0
+        LAST_RESET_DATE=$today
+        save_state
+    fi
 }
 
 flush_session() {
@@ -85,7 +103,7 @@ flush_session() {
 kill_games() {
     local reaper_pid
     reaper_pid=$(get_reaper_pid)
-    notify "🎮 Time's up" "Gaming limit reached. See you after reboot!"
+    notify "🎮 Time's up" "Gaming limit reached. See you tomorrow after ${RESET_HOUR}:00!"
     local pids
     pids=$(get_game_descendants "$reaper_pid")
     log "kill_games: sending TERM to PIDs: $(echo $pids | tr '\n' ' ')"
@@ -116,11 +134,12 @@ warn_if_needed() {
     fi
 }
 
-log "Starting steam-limiter (limit=${LIMIT_MINUTES}m, poll=${POLL_SECONDS}s)"
+log "Starting steam-limiter (limit=${LIMIT_MINUTES}m, poll=${POLL_SECONDS}s, reset_hour=${RESET_HOUR}:00)"
 load_state
 log "Loaded state: accumulated=${ACCUMULATED}s session_start=${SESSION_START} warned=${WARNED_10}/${WARNED_5}/${WARNED_1}"
 
 while true; do
+    check_daily_reset
     NOW=$(date +%s)
     if game_running; then
         if [ "$SESSION_START" -eq 0 ]; then
